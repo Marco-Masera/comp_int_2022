@@ -1,14 +1,16 @@
 from heapq import heappop, heappush
 
-#Implementazione di uno heap minimo
-pq = []                         # list of entries arranged in a heap
+#Simple min heap implementation
+pq = []
 
-def add_node(node):
-    heappush(pq, (node.cost(), node))
+def add_node(node, priority):
+    if (node == None):
+        return
+    heappush(pq, (node.cost(), priority, node))
 
 
 def pop_node():
     try:
-        return heappop(pq)[1]
+        return heappop(pq)[2]
     except:
         return None
