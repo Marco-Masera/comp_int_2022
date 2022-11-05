@@ -32,7 +32,7 @@ Execution of the program is:
 * OFFSPRINGS = 4000
 * GENERATIONS = 80
 * MUTATIONS = 2
-
+# # Solutions:
 * N=5: 5 elements. **Best solution**
 * N=10: 10 elements. **Best solution**
 * N=20: 23 elements. **Best solution**
