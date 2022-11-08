@@ -9,12 +9,15 @@ elementCovers = None
 listsCost = None 
 
 #Global configuration
-N = 50
+N = 100
 POPULATION_SIZE = 2000
-TOURNAMENT_SIZE = 500
+TOURNAMENT_SIZE = 400
 OFFSPRINGS = 4000
-GENERATIONS = 140
+GENERATIONS = 80
 MUTATIONS = 2
+
+ALLOW_CLEAN_GENOME = False
+MASS_EXTINCTION = True
 
 
 class Individual:
@@ -41,6 +44,18 @@ class Individual:
     def get_copy(self):
         return Individual(np.copy(self.genome))
 
+    #Added after the presentation of 07/11 lesson to check how much it improves the result
+    def clean_genome(self):
+        used_l = set()
+        for (index, l) in enumerate(self.genome):
+            if (not (l in used_l)):
+                for alt in elementCovers[index]:
+                    if ( alt in used_l):
+                        self.genome[index] = alt
+                        break
+                used_l.add(self.genome[index])
+            
+
 
 #Creates a third individual with genome mixed from the two parents
 def mix_genomes(parent_1, parent_2):
@@ -58,23 +73,41 @@ def get_random_individual():
 
 
 def execute():
-    """POPULATION_SIZE = 10
-    TOURNAMENT_SIZE = 4
-    OFFSPRINGS = 3
-    GENERATIONS = 10
-    MUTATIONS"""
     best_individual = None
+    last_best = -1
     #Creates first random individuals
     population = [get_random_individual() for i in range(0, POPULATION_SIZE)] 
+    clean = False
     for generation in range(1, GENERATIONS):
         #Select the best ones - and keep track of the best so far
         population.sort(key = lambda i: i.fitness())
-        population = population[0:TOURNAMENT_SIZE]
+
+        #Mass extinction is added after 07/11
+        if (MASS_EXTINCTION and generation==(int(GENERATIONS/3))):
+            print("Mass extinction :(")
+            last_best = generation
+            population = population[0:(int(TOURNAMENT_SIZE/4))]
+            for j in range(0, (int(TOURNAMENT_SIZE/4) * 3)):
+                population.append(get_random_individual())
+        else:
+            population = population[0:TOURNAMENT_SIZE]
+
+        #Clean genome added after 07/11
+        if (ALLOW_CLEAN_GENOME):
+            if (clean):
+                for p in population:
+                    p.clean_genome()
+                clean = False 
+            else:
+                clean = True 
+
+
         new_generation = []
         p = np.array(population)
 
         if (best_individual == None or (best_individual.fitness() > p[0].fitness())):
                 print(f"Found new best individual with cost {p[0].fitness()} at generation {generation}")
+                last_best = generation
                 best_individual = p[0].get_copy()
 
         for i in range(OFFSPRINGS):
@@ -105,6 +138,7 @@ def execute():
                 new_generation.append(mix_genomes(best_c, second_b))
             #new_generation.append(best_c)
         population = new_generation"""
+    best_individual.clean_genome()
     print(f"Best individual found has cost {best_individual.fitness()}")
 
     
