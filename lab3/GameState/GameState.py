@@ -39,9 +39,8 @@ class Nim:
     def k(self) -> int:
         return self._k
 
-    def nimming(self, ply: Nimply) -> None:
+    def nimming(self, ply: Nimply) -> MoveResult:
         row, num_objects = ply
-        print(f"Move row: {row}, num: {num_objects}")
         assert self._rows[row] >= num_objects
         assert self._k is None or num_objects <= self._k
         assert num_objects > 0

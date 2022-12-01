@@ -1,13 +1,25 @@
 from GameState.GameState import *
 from PlayerBaseClass import *
 from Strategies.NimSum import NimSum
+from Strategies.EvolvingRules.EvolvingAgent import EvolvingAgent
 #Params
 NUM_ROWS = 5
 K = None 
 PRINT_EACH_MOVE = True 
-#Players
-PLAYER_1 = NimSum()
-PLAYER_2 = NimSum()
+
+#Constructors to get Players instances:
+#NimSum perfect agent (3.1)
+def get_nimsum_agent():
+    return NimSum()
+#Evolving rules agent with pre-learned rules
+def evolving_rules_agent():
+    return EvolvingAgent.get_from_learned_strategy();
+
+#Players 
+PLAYER_1 = evolving_rules_agent()
+PLAYER_2 = get_nimsum_agent()
+
+
 
 
 #   This methods takes one Nib game and Two player implementing the PlayerBase interface, and allow them to play until the game ends.
@@ -25,7 +37,7 @@ def game(game: Nim, player_1, player_2, print_each_move = False):
         if move_result == MoveResult.Game_Over:
             break
         #Swap players
-        turn += 1; turn %= 2
+        turn  = 1 - turn
         
 
     print(f"Game ended. Player #{turn+1} is the winner!")
