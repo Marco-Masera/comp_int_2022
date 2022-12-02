@@ -4,7 +4,7 @@ from Strategies.NimSum import NimSum
 from Strategies.EvolvingRules.EvolvingAgent import EvolvingAgent
 #Params
 NUM_ROWS = 5
-K = None 
+K = 4
 PRINT_EACH_MOVE = True 
 
 #Constructors to get Players instances:

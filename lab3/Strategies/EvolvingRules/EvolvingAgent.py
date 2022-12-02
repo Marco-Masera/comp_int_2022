@@ -6,9 +6,13 @@ import numpy as np
 import random
 from PlayerBaseClass import PlayerBase
 from GameState.GameState import *
-from Instructors import RandomAgent, GenerousNimSum
 from Strategies.NimSum import NimSum
-from learned_rules import learned_strategy
+if __name__=='main':
+    from Instructors import  GenerousNimSum
+    from learned_rules import learned_strategy
+else:
+    from Strategies.EvolvingRules.Instructors import GenerousNimSum
+    from Strategies.EvolvingRules.learned_rules import learned_strategy
 
 
 
@@ -19,8 +23,12 @@ class TransformationRules:
     def id(game:Nim) -> list:
         return list(game.rows)
     def modK(game:Nim) -> list:
+        if (game.k == None):
+            return game.rows 
         return [x%(game.k) for x in game.rows]
     def modK_plus1(game:Nim) -> list:
+        if (game.k == None):
+            return game.rows 
         return [x%(game.k+1) for x in game.rows]
     def power_2(game:Nim) -> list:
         return [x*x for x in game.rows]
@@ -204,6 +212,9 @@ class EvolvingAgent(PlayerBase):
         
 
     def play(self,game:Nim) -> MoveResult:
+        game_k = game.k
+        if (game_k == None):
+            game_k = 90000
         #Find the rules to use
         transformation_func = EvolvingAgent.get_choice(self.genome['transformation'])
         cumulative_value_func = EvolvingAgent.get_choice(self.genome['cumulative_value'])
@@ -213,15 +224,15 @@ class EvolvingAgent(PlayerBase):
         amount_function_alt = EvolvingAgent.get_choice(self.genome['amount_alternative'])
         #Use the rules in order to execute an action
         transformed_list = TransformationRules.get_function(transformation_func)(game)
-        cumulative_value = CumulativeValueRules.get_function(cumulative_value_func)(transformed_list, game.k)
-        sorted_list = SortingRules.get_function(sorting_function)(transformed_list, game.k, cumulative_value)
-        split_value = SplitRules.get_function(split_function)(sorted_list[0][0], game.k, cumulative_value)
+        cumulative_value = CumulativeValueRules.get_function(cumulative_value_func)(transformed_list, game_k)
+        sorted_list = SortingRules.get_function(sorting_function)(transformed_list, game_k, cumulative_value)
+        split_value = SplitRules.get_function(split_function)(sorted_list[0][0], game_k, cumulative_value)
         amount = -1
         if (split_value):
-            amount = AmountRules.get_function(amount_function)(sorted_list[0][0], game.k, cumulative_value)
+            amount = AmountRules.get_function(amount_function)(sorted_list[0][0], game_k, cumulative_value)
         else:
-            amount = AmountRules.get_function(amount_function_alt)(sorted_list[0][0], game.k, cumulative_value)
-        amount = min(game.k, amount)
+            amount = AmountRules.get_function(amount_function_alt)(sorted_list[0][0], game_k, cumulative_value)
+        amount = min(game_k, amount)
         #Check if the decision is ok (should be most of times) - if it's not it uses a default decision
         if (game.rows[sorted_list[0][1]] >= amount and amount > 0):
             #Ok
@@ -346,7 +357,3 @@ class AgentsGim:
 if (__name__ == '__main__'):
     AgentsGim.evolve_individuals()
 
-
-#Todo:
-#Funzione equilibra percentuali non funziona, tendono a non sommarsi a 100!!
-#Target in amount
