@@ -55,6 +55,7 @@ class GenerousNimSum(PlayerBase):
                         for index, tuple in enumerate(game.rows):
                             if (tuple > 0):
                                 return game.nimming((index, 1))
+                #Else play as normal NimSum
                 return game.nimming((index, tuple-target))
                 
                 

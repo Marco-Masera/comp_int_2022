@@ -39,6 +39,8 @@ class Nim:
     def k(self) -> int:
         return self._k
 
+
+
     def nimming(self, ply: Nimply) -> MoveResult:
         row, num_objects = ply
         assert self._rows[row] >= num_objects

@@ -1,12 +1,9 @@
 from GameState.GameState import *
 from PlayerBaseClass import *
 from Strategies.NimSum import NimSum
+from Strategies.MinMax import MinMax
 from Strategies.EvolvingRules.EvolvingAgent import EvolvingAgent
-#Params
-NUM_ROWS = 5
-K = 4
-PRINT_EACH_MOVE = True 
-
+ 
 #Constructors to get Players instances:
 #NimSum perfect agent (3.1)
 def get_nimsum_agent():
@@ -14,11 +11,21 @@ def get_nimsum_agent():
 #Evolving rules agent with pre-learned rules
 def evolving_rules_agent():
     return EvolvingAgent.get_from_learned_strategy();
+#MinMax unbonded, bounded with horizon effect, bounded with xor sum as gain function
+def get_minmax_unbounded():
+    return MinMax.get_minmax_unbounded()
+def get_minmax_bounded_horizon(bound):
+    return MinMax.get_minmax_bounded_horizon(bound)
+def get_minmax_bounded_xor(bound):
+    return MinMax.get_minmax_bounded_xor(bound)
 
 #Players 
-PLAYER_1 = evolving_rules_agent()
+PLAYER_1 = get_minmax_bounded_xor(1)
 PLAYER_2 = get_nimsum_agent()
-
+#Params
+NUM_ROWS = 4
+K = 2
+PRINT_EACH_MOVE = True
 
 
 

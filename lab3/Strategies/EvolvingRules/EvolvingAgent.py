@@ -345,7 +345,7 @@ class AgentsGim:
             population = new_p
 
 
-        print("End. Best 3 individuals:")
+        print("End of process. Best 3 individuals:")
         for p in population: p[0] = AgentsGim.fight_epoch_2(p[1], population) 
         population.sort(reverse = True, key = lambda x: x[0])
         for p in population[:3]:
