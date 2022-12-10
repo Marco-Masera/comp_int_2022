@@ -38,7 +38,7 @@ class ReinforcementLearningAgent(PlayerBase):
                 self.states_reward[hashable] = (0.5 * (1-alpha)) + (reward * alpha)
             alpha *= discount_factor
 
-    #Take action calls game.nimming to make the move, but it can memorize informations for the purpose of learning
+    #Take action calls game.nimming to make the move, but it also memorize informations for the purpose of learning
     def take_action(self, game, action):
         result = game.nimming(action) 
         self.states.append(self.reduce_state(game))
@@ -98,34 +98,93 @@ class ReinforcementLearningAgent(PlayerBase):
             return self.take_action(game, best_action)
 
 
-def run():
-    players = (ReinforcementLearningAgent(), NimSum()); 
-    for i in range(0,1000):
+#Tries to make the agent learn for a given rows, k. Returns the
+#number of games won
+def learn(player, rows, k, max_rounds = 1000, alpha = 0.4, discount_factor = 0.1, exploration_factor = 20):
+    players = (player, NimSum()); 
+    wins = 0
+    wins_in_a_row = 0
+    player.alpha = alpha 
+    player.discount_effect_factor = discount_factor
+    for i in range(0,max_rounds):
         turn = 0 
-        game = Nim(3, 2)
-        players[0].exploration = int( 20 * (1000-i) / 1000 )
+        game = Nim(rows, k)
+        if (wins_in_a_row < 3):
+            players[0].exploration = int( exploration_factor * (max_rounds-i) / max_rounds )
+        else:
+            players[0].exploration = 0 #If it's winning, let's focus on exploiting instead of exploring
         players[0].initialize(game); players[1].initialize(game)
         while(True):
             move_result = players[turn].your_turn(game)
             if move_result == MoveResult.Game_Over:
-                print(f"Game #{i}, player {turn} won")
-                players[0].give_reward((1-turn)*2 - 1) #1 se ha vinto lui se no -1
-                break
-            turn  = 1 - turn
-
-    for i in range(0,300):
-        turn = 0 
-        game = Nim(5, 3)
-        #players[0].exploration = int( 20 * (1000-i) / 1000 )
-        players[0].initialize(game); players[1].initialize(game)
-        while(True):
-            move_result = players[turn].your_turn(game)
-            if move_result == MoveResult.Game_Over:
-                print(f"Game #{i}, player {turn} won")
+                #print(f"Game #{i}, player {turn} won")
+                if (turn==0):
+                    wins+=1
+                    wins_in_a_row+=1
+                else:
+                    wins_in_a_row = 0
                 players[0].give_reward((1-turn)*2 - 1) #1 se ha vinto lui se no -1
                 break
             turn  = 1 - turn
         
+    return wins
+
+#Fast learn use the Xor sum to give a reward for each move of the agent, instead of waiting for it to finish the game.
+def fast_learn(player, rows, k, exploraton=35, max_rounds = 1000, alpha = 0.4):
+    players = (player, NimSum())
+    player.alpha = alpha
+    for i in range(0,max_rounds):
+        turn = 0 
+        game = Nim(rows, k)
+        players[0].exploration = exploraton
+        players[1].initialize(game)
+        while(True):
+            #Initialize is now called at each move, so the reward given will affect only the last choice
+            players[0].initialize(game); 
+            move_result = players[turn].your_turn(game)
+            if move_result == MoveResult.Game_Over:
+                players[0].give_reward((1-turn)*2 - 1) #1 se ha vinto lui se no -1
+                break
+            #if it's player 0 turn, let's compute the nimsum and reward the agent
+            if (player==0):
+                tuples = None
+                if (game.k is not None):
+                    tuples = [x%(game.k+1) for x in game.rows]
+                else:
+                    tuples = list(game.rows)
+                nim_sum = 0
+                for tuple in tuples: nim_sum = nim_sum ^ tuple
+                if (nim_sum == 0):
+                    players[0].give_reward(1)
+                else:
+                    players[0].give_reward(-0.6)
+                    break
+            turn  = 1 - turn
+
+def run():
+
+    rounds = [
+        #{'rows': 4, 'k': 2},
+        #{'rows': 5, 'k': 4},
+        #{'rows': 6, 'k':4},
+        {'rows': 6, 'k':4, 'n_matches': 3000},
+        {'rows': 8, 'k':5, 'n_matches': 60000}
+    ]
+    print("\n")
+    for round in rounds:
+        n_matches = 500
+        if ('n_matches' in round):
+            n_matches = round['n_matches']
+        print(f"Playing round with Rows = {round['rows']} and K = {round['k']}")
+        agent = ReinforcementLearningAgent()
+        wins = learn(agent, round['rows'], round['k'], max_rounds = n_matches, alpha = 0.4, discount_factor = 0.1, exploration_factor = 20)
+        print(f"{wins} victories over {n_matches} games")
+        print("Let's try with fast learn before and lower exploration after:")
+        agent = ReinforcementLearningAgent()
+        fast_learn(agent, round['rows'], round['k'], exploraton=40, max_rounds = n_matches*2, alpha = 0.9)
+        wins = learn(agent, round['rows'], round['k'], max_rounds = n_matches, alpha = 0.4, discount_factor = 0.1, exploration_factor = 5)
+        print(f"Now it's {wins} victories over {n_matches} games")
+        print("\n")
 
 
 if (__name__ == '__main__'):
