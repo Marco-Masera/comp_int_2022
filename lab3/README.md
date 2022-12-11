@@ -3,7 +3,7 @@
 The game is represented by the class GameState.py. Which is the same provided by the professor.
 The only difference is that now the nimming() function returns a MoveResult enum that contains the information on whether the game is over or not.
 
-# # Agents implementation
+## Agents implementation
 Agents implement the PlayerBaseClass class, and need to override the play() method, where they decide for the move to make and call the nimming() function on the game.
 An initialize() method can be overridden too if the agent needs to initialize some data before playing.
 
