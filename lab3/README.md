@@ -12,7 +12,7 @@ The main.py file allow to test the different agents. A few global variables at t
 For each agent a constructor method is provided in the same file.
 
 
-# 3.1: Evolving Rules
+# 3.2: Evolving Rules
 
 The biggest problem in the task of creating the evolving agent was to find a way to encode the possible rules in a way that allowed them to evolve.
 After some iterations I decided to go through the route of having some hard-coded rules and let the agent evolve choosing and combining some of them.
@@ -91,7 +91,7 @@ It's also important noting that there is a big variability in how fast the model
 
 Finally, the set of possible rules isn't massive and the rules able to play as NimSum were added on purpose. If someone with no idea on how NimSum work would try to find a solution with this strategy, he would have to provide a way bigger set of rules, hoping to include the useful ones. This would surely make the model much slower to improve, and it'd be interesting to see if it could converge with around 100x the number of rules it has now.
 
-# 3.2: MinMax
+# 3.3: MinMax
 
 # # General considerations
 The MinMax agent is contained in the file MinMax.py.
