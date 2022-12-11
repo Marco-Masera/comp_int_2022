@@ -102,3 +102,55 @@ The MinMax agent has three configurations:
 * **Bounded with horizon**: minmax is bounded, and it suffers from the horizon effect. If after reaching the max depth the game isn't over, it returns an extimated gain of 0.5. Fast but not a very strong opponent.
 * **Bounded with xor function**: minmax is bounded and when reaching the ma depth it uses the xor sum to check if the current situation can lead to a win or a lose. It's strong but using the xor function kind of makes the whole minmax algorithm useless here, as setting a depth of 1 is enough to win. 
 
+
+# 3.4: Reinforcement learning
+
+# # General considerations
+The Reinforcement learning agents uses the Q-learn strategy. It is by itself a simple strategy and works good when the number of rows is limited, but not so much when the number of rows is high. It also is very problem-specific.
+
+# # Reducing the space of states and actions
+The most trivial way to represent states and actions is to keep track of each row's remaining elements for the state and allowing any possible number of elements to be removed from each row for actions. But the number of states and actions can be massive, so it can be useful to look for ways to reduce it without losing useful informations.
+* **State reduction rule: Avoid permutation**: when we have a certain number of rows each with a certain number of elements, it's not useless to keep track of their order. So states like [1, 3, 3], [3, 1, 3] or [3, 3, 1] can be seen as the same state. This is implemented by simply sorting the rows before passing them to the dictionary storing the rewards.
+* **State reduction rule #2: Remove zeros**: empty rows aren't useful in any way and can be removed from the state.
+* **Action reduction rules**: actions that cause equal results and merged. If there is more than one row with the same number of elements, each action on one of them brings the same result as the same action on any another one of them.
+
+# # Implementation
+The implementation is again very simple. It involves using the following methods:
+* get_actions: get all possible actions given a current state. Actions are reduced.
+* get_reward_from_state: get the expected reward of a given state. Reward are stored in a dictionary and initialized lazily.
+* policy: given a state and a set of moves, the policy choses the one with higher expected reward.
+* play: the play methods follow the rules:
+* * get possible actions
+* * if it chooses exploration, do a random one
+* * if not, use policy() and do the best move.
+* give_reward: called by some external script, it gives a reward or a negative reward.
+* * the agent keep track of the sequence of actions taken and the reward is spread across them
+* * the initialize() method reset the sequence of memorized actions.
+
+# # Learning
+The ReinforcementLearningAgent.py file is executable and contains some logic that makes the Agent learn by playing against NimSum:
+* * learn(): it makes the agent play for max_rounds against NimSum and returns the number of victories. The rewards are given to the agent after each game.
+* * fast_learn(): it also makes the agent play against NimSum but for a faster learning process this method gives a reward after each move, using the Xor sum to check if the state is good or not.
+
+# # Result
+The results are good for low numbers of rows: in these cases the agent learns fast. For bigger number of rows the agent become significantly slower in learning. 
+This is not a surprise as, even with some reduction of the space of states, this is close to a brute force solution that simply tries to map each state to a reward value, and the space of states grows more than exponentially to the number of Rows (something in the order of magnitude of N_ROWS! ).
+Here some results are provided, but keep in mind that the number of victories is dependent on many parameters such as the exploration ratio.
+* Rows = 4, K = 2:
+* * 500 mathes against NimSum: **451 victories**.
+* * 1000 cycles of fast learning + 500 matches against NimSum: **478 victories**.
+* Rows = 5, K = 4:
+* * 500 mathes against NimSum: **352 victories**.
+* * 1000 cycles of fast learning + 500 matches against NimSum: **437 victories**.
+* Rows = 6, K = 4:
+* * 500 mathes against NimSum: **92 victories**.
+* * 1000 cycles of fast learning + 500 matches against NimSum: **225 victories**.
+* * 3000 mathes against NimSum: **1946 victories**.
+* * 6000 cycles of fast learning + 3000 matches against NimSum: **2707 victories**.
+* Rows = 8, K = 5:
+* * 500 mathes against NimSum: **0 victories**.
+* * 1000 cycles of fast learning + 500 matches against NimSum: **0 victories**.
+* * 30.000 mathes against NimSum: **1 victory**.
+* * 60.000 cycles of fast learning + 30.000 matches against NimSum: **24.831 victories**.
+* * 60.000 mathes against NimSum: **1 victory**.
+* * 120.000 cycles of fast learning + 60.000 matches against NimSum: **50218 victories**.

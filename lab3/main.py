@@ -2,6 +2,7 @@ from GameState.GameState import *
 from PlayerBaseClass import *
 from Strategies.NimSum import NimSum
 from Strategies.MinMax import MinMax
+from Strategies.AlwaysOdd import AlwaysOdd
 from Strategies.EvolvingRules.EvolvingAgent import EvolvingAgent
  
 #Constructors to get Players instances:
@@ -20,7 +21,7 @@ def get_minmax_bounded_xor(bound):
     return MinMax.get_minmax_bounded_xor(bound)
 
 #Players 
-PLAYER_1 = get_minmax_bounded_xor(1)
+PLAYER_1 = get_nimsum_agent()
 PLAYER_2 = get_nimsum_agent()
 #Params
 NUM_ROWS = 4
