@@ -56,7 +56,7 @@ def sum(state):
         s += (it * (17**(index)))
     return s
 
-
+#Pre processed stuff - for each pawn, the sets of pawns with 0,1,2 or 3 features in common is stored.
 pawns = dict()
 for i in range(0, 16):
     p = dict()
@@ -67,44 +67,59 @@ for i in range(0, 16):
     p[4] = set() #No other pawn is equal
     pawns[i] = p
 
+#Get number of features in common between two pawns
 def n_bit_in_common(n1, n2):
-    n3 = (~(n1 ^ n2)) & 15 
+    n3 = (~(n1 ^ n2)) & 15
     count = 0
     for bit in str(bin(n3)):
         if (bit=='1'): count+=1
     return count
 
+all_elems = set([x for x in range(16)])
 
+def flat_pawns_recursive(elems, dipendenze, posizione):
+    if (posizione>=len(dipendenze)):
+        return [elems] 
+    allowed_set = all_elems - set(elems)
+    for i in range(0, len(elems)):
+        n = dipendenze[i][posizione]
+        p = [j for j in range(16) if n_bit_in_common(elems[i], j)==n]
+        allowed_set = allowed_set.intersection(set(pawns[elems[i]][n]))
+    allowed_set = list(allowed_set)
+    allowed_set.sort()
+    for item in allowed_set:
+        p = flat_pawns_recursive(elems + [item,], dipendenze, posizione+1)
+        if (p!=None): return p
+    return None
 
 def flat_pawns(state, pawn):
-    found = []  #tuples: (pawn_found, new_pawn)
-    for index,box in enumerate(state):
-        if (box == -1):
-            continue 
-        allowed_pawns = set([x for x in range(0,16)]) #All pawns are allowed...
-        for elem in found:
-            n = n_bit_in_common(box, elem[0])
-            allowed_pawns = allowed_pawns.intersection(pawns[elem[1]][n])
-        if (len(allowed_pawns)==0):
-            print("!!")
-            print(f"{box} - {str(bin(box))}")
-            print([ f"{x[0]}: {str(bin(x[0]))}  -  {x[1]}: {str(bin(x[1]))}" for x in found ])
-            allowed_pawns = set([x for x in range(0,16)]) #All pawns are allowed...
-            for elem in found:
-                print(allowed_pawns.intersection(pawns[elem[1]][n]))
-            exit()
-        chosen_pawn = min(allowed_pawns)
-        found.append((box, chosen_pawn))
-        state[index] = chosen_pawn
-    #Updates pawn too
-    if (pawn == None):
-        return None
-    allowed_pawns = set([x for x in range(0,16)]) 
-    for elem in found:
-        n = n_bit_in_common(pawn, elem[0])
-        allowed_pawns = allowed_pawns.intersection(pawns[elem[1]][n])
-    return min(allowed_pawns)
+    #Ugly messing around with the list to make the function compatible with the minmax agent of generate_dataset
+    elems = np.array([x for x in state if x != -1])
+    state_length = len(elems)
+    remaining = all_elems - set(elems) 
+    if (pawn != None):
+        remaining.remove(pawn)
+        elems = np.append(elems, [pawn])
+    remaining = list(remaining)
+    if (len(remaining)>0):
+        elems = np.append(elems, remaining)
 
+    #Builds dependency matrix
+    dip = []
+    for i in range(16):
+        dip.append([ n_bit_in_common(elems[i], elems[x]) for x in range(16) ])
+    #Call the recursive function that makes the flattening
+    elems = flat_pawns_recursive([], dip, 0)
+
+    #Ugly messing around with the result again
+    j = 0
+    for i in range(len(state)):
+        if (state[i]!=-1):
+            state[i] = elems[0][j]
+            j+=1
+    if (pawn != None):
+        return elems[0][state_length]
+    return None
 
 def collapse(state, pawn):
     pawn = flat_pawns(state, pawn)

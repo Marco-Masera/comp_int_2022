@@ -1,9 +1,0 @@
->Lista tuple (pedina trovata, pedina sostitutiva)
->Per ogni PEDINA non -1:
-    -Se primo valore: setto a 0; inserisco pedina in pedine sostituite
-    -Se no:
-    -SET sostituti accettabili = (tutte pedine)
-    -Per ogni tupla in lista tuple:
-        -Calcolo N bit in comune tra PEDINA e pedina_trovata[i]
-        -SET = SET intersezione (Pedina_Sostitutiva.set(N))
-    -Inserisco pedina più piccola tra quelle nel mio set 
