@@ -3,108 +3,141 @@ import json
 import random
 import copy
 from quarto_utils import checkState, bits_in_common_multiple
-"""
-    Features hanno valore binario, 1 se attive 0 se disattive
-    Feature: array di 16 elementi, 1 per cella attiva, 0 per disattiva
-    Tipi features:
-        >Tipo A: attiva se piena con pedine che hanno un attributo comune
-        >Tipo B: attiva se piena con pedine che non hanno attributi in comune
-        >TIpo C: attiva se vuota
-    Integrazione:
-        >NxN
-        >Attiva se entrambe attive
-        >Peso
-        >Per features di tipo A: attiva se entrambe condividono attributi comuni
-        >Per features di tipo AxC e AxCb: attiva solo se A contiene una feature in comune con la pedina
-                                                    e nel caso b se ho una pedina con una feature in comune
-    Genome: [ [Features] [Weight Matrix] ]
-"""
-N_FEATURES_A = 20
-N_FEATURES_B = 10
-N_FEATURES_C = 16
-N_FEATURES = N_FEATURES_A+N_FEATURES_B+N_FEATURES_C
+
+#Init some static stuff to calculate the feature faster during runtime
+LINES = [
+    # ( (caselle),[(quale_riga_tocca, casella )])
+    ((0, 1, 3, 6), [] ),   #0
+    ((2, 4, 7, 10), []),      #1
+    ((5,8, 11, 13), []),      #2
+    ((9, 12, 14, 15), []),    #3
+    ((6, 10, 13, 15), []),    #4
+    ((3, 7, 11, 14), []),     #5
+    ((1, 4, 8, 12), []),     #6
+    ((0, 2, 5, 9), []),       #7
+    ((6, 7, 8, 9), []),       #8
+    ((0, 4, 11, 15), [])]     #9
+LINES_PRECEDING = np.array([0 for _ in range(16)])
+count_ = 0
+for index,line in enumerate(LINES):
+    LINES_PRECEDING[index] = count_
+    for index2 in range(index+1, len(LINES)):
+        line2 = LINES[index2]
+        check = -1
+        for c in line2[0]:
+            if (c in line[0]):
+                check = c
+                line[1].append([index2, c])
+                count_  = count_ + 1
+                break
+LINES_PRECEDING[len(LINES_PRECEDING)-1] = count_
+MULTILINE_BLOCK = ((LINES_PRECEDING[len(LINES_PRECEDING)-1] * 6) + 80)
+
+
 class StateReward:
+    state_length = (MULTILINE_BLOCK)*2
     #Process state is used to convert the raw state from the agent to the format used to compute the function
     def process_state(state):
-        return [state[0], state[1], list(set([x for x in range(16)]) - set(state[0]))]
+        return [np.array(state[0]), state[1], list(set([x for x in range(16)]) - set(state[0]))]
 
     def get_random_genome(self):
-        #Features [ [feat. 1], [feat. 2] ... ]
-        features = []
-        weights = np.zeros((N_FEATURES, N_FEATURES + (N_FEATURES_C)), dtype=float) #Genome: N Features x N Features + C
-        for i in range(N_FEATURES):
-            features.append([np.array([ random.choice([True, False]) for _ in range(16)]), 0, None])
-            for j in range(i, N_FEATURES + N_FEATURES_C): 
-                weights[i][j] = random.uniform(-0.1, 0.1)
-        return (np.array(features, dtype=object), weights)
+        return np.array([random.uniform(-1,1) for _ in range(StateReward.state_length)])
     
     #State needs to be processed via process_state before this function is called
     def get_reward(self, state): #State = ([chessboard], assigned_pawn, set[remaining])
+        global LINES; global LINES_PRECEDING; global MULTILINE_BLOCK;
         full, winning = checkState(state[0])
         if (winning):
-            return 1000
+            return 120
         if (full):
             return 0
-        reward = 0
-        #Check features of type A
-        for i in range(0, N_FEATURES_A):
-            feature = self.genome[0][i]
-            #Activated = feature[1], feature[0] è chessboard
-            feature[1] = 1
-            last = None; acc=15
-            for i in range(16):
-                if (feature[0][i]==True):
-                    if (state[0][i]==-1 ):
-                        feature[1] = 0
-                        break
+        chessboard = state[0]
+        mylines = np.array([(False, 0,0) for _ in range(16)])
+        self.truth_value = np.array([0 for _ in range(StateReward.state_length)])
+        #mylines = [] -> (Active, acc)
+        for index,line in enumerate(LINES):
+            count = 0; acc = 15; last = None
+            for box in line[0]:
+                if (chessboard[box]!=-1):
+                    count += 1
                     if (last != None):
-                        acc = acc & (~(last ^ state[0][1]))
-                    last = state[0][1]
-            feature[2] = (last, acc)
-            if (acc==0):
-                feature[1] = 0
-        #Check features of type B
-        for i in range(N_FEATURES_A, N_FEATURES_A+N_FEATURES_B):
-            feature = self.genome[0][i]
-            feature[1] = 1
-            for i in range(16):
-                if (feature[0][i]==True and state[0][i]!=-1):
-                    feature[1] = 0
-                    break
-        #Features of type C
-        for i in range(N_FEATURES_A+N_FEATURES_B, N_FEATURES):
-            feature = self.genome[0][i]
-            feature[1] = 1
-            for i in range(16):
-                if (feature[0][i]==True and state[0][i]!=-1):
-                    feature[1] = 0
-                    break
-        #COmputes the reward
-        for i in range(N_FEATURES):
-            for j in range(i, N_FEATURES+N_FEATURES_C):
-                #C x Cb viene balzata
-                if (i>=N_FEATURES-N_FEATURES_C and j >= N_FEATURES):
-                    continue 
-                if (j >= N_FEATURES): 
-                    j2 = j - N_FEATURES_C 
-                else: j2 = j
-                if (self.genome[0][i][1]*self.genome[0][j2][1]==0):
-                    continue
-                weight = self.genome[1][i][j]
-                #Per features di tipo A: attiva se entrambe condividono attributi comuni
-                if (i<N_FEATURES_A and j < N_FEATURES_A): #(last, acc)
-                    first = self.genome[0][i][2]; second = self.genome[0][j][2]
-                    if (( (~(first[0] ^ second[0])) & first[1] & second[1]) ==0):
-                        continue
-                #>Per features di tipo AxCn: attiva solo se A contiene la feature n e 1 attiva se
-                if (i<N_FEATURES_A and j>=N_FEATURES-N_FEATURES_C):
-                    if (bits_in_common_multiple([state[1]], acc=self.genome[0][i][2][1], last=self.genome[0][i][2][0])==0):
-                        continue
-                if (i<N_FEATURES_A and j>=N_FEATURES):
-                    if (bits_in_common_multiple(state[2], acc=self.genome[0][i][2][1], last=self.genome[0][i][2][0])==0):
-                        continue
-                reward += weight
-        return reward
+                        acc = acc & (~(chessboard[box] ^ last))
+                    last = chessboard[box]
+            
+            if (acc == 0):
+                mylines[index] = (False, acc, 0)
+                continue 
+            #can extend, can block -> calcolati da pawn
+            if (count != 0 and acc & (~(state[1] ^ last))):#(can_extend):
+                self.truth_value[(index*8) + count] = 1
+            else: # (can_block):
+                self.truth_value[(index*8) + count + 4] = 1
+
+            #posso bloccare avversario -> calcolato
+            one_extending = False; one_blocking = False
+            for pawn in state[2]:
+                if (count!=0 and acc & (~(pawn ^ last))):
+                    one_extending = True 
+                else:
+                    one_blocking = True 
+                if (one_blocking and one_extending): break
+
+            if (one_extending):
+                self.truth_value[MULTILINE_BLOCK + (index*8) + count] = 1
+            elif (one_blocking):
+                self.truth_value[MULTILINE_BLOCK + (index*8) + count + 4] = 1
+            #aggiorna linea singola -> index
+            if (last==None):
+                last = -1
+            mylines[index] = (True, acc, last)
+        #Secondo giro
+        for index,line in enumerate(LINES):
+            if (mylines[index][0] == False): continue
+            for common in line[1]:
+                if (mylines[common[0]][0] == False): continue
+                if (chessboard[common[1]] != -1): continue 
+
+                #Verifica se posso bloccare entrambe, aumentarle entrambe o una e una
+                acc = mylines[index][1]; acc2 = mylines[common[0]][1]
+                can_extend_one = (acc & (~(state[1] ^ mylines[index][2])))!=0
+                can_extend_two = (acc2 & (~(state[1] ^ mylines[common[0]][2])))!=0
+                if (can_extend_one and can_extend_two):
+                    self.truth_value[80 + (LINES_PRECEDING[index] * 6)] = 1
+                elif (can_extend_one != can_extend_two):
+                    self.truth_value[80 + (LINES_PRECEDING[index] * 6) + 1] = 2
+                else:
+                    self.truth_value[80 + (LINES_PRECEDING[index] * 6) + 2] = 3
+                #verifica se posso bloccare avversario, verifica se può bloccare me
+                canEO = 0; canBO = 0; canM = 0
+                for pawn in state[2]:
+                    can_extend_one = (acc & (~(pawn ^ mylines[index][2])))!=0
+                    can_extend_two = (acc2 & (~(pawn ^ mylines[common[0]][2])))!=0
+                    if (can_extend_one and can_extend_two):
+                        canEO += 1
+                        if (canEO==1):
+                            self.truth_value[80 + MULTILINE_BLOCK + (LINES_PRECEDING[index] * 6)] = 1
+                        else:
+                            self.truth_value[80 + MULTILINE_BLOCK + (LINES_PRECEDING[index] * 6) + 3] = 1
+                    elif (can_extend_one != can_extend_two):
+                        canBO += 1
+                        if (canBO==1):
+                            self.truth_value[80 + MULTILINE_BLOCK + (LINES_PRECEDING[index] * 6) + 1] = 1
+                        else:
+                            self.truth_value[80 + MULTILINE_BLOCK + (LINES_PRECEDING[index] * 6) + 4] = 1
+                    else:
+                        canM += 1
+                        if (canM==1):
+                            self.truth_value[80 + MULTILINE_BLOCK + (LINES_PRECEDING[index] * 6) + 2] = 1
+                        else:
+                            self.truth_value[80 + MULTILINE_BLOCK + (LINES_PRECEDING[index] * 6) + 5] = 1
+                    if (canEO >= 2 and canBO >= 2 and canM >= 2): break
+        
+        
+        reward = np.matmul(self.genome,self.truth_value)
+        if (reward > 0):
+            return min(reward,140)
+        else:
+            return max(-140, reward)
 
     def __init__(self, genome = None):
         if (genome==None):
@@ -115,33 +148,10 @@ class StateReward:
 
 
     def random_mutations(self, n_mutation):
-        for _ in range(n_mutation):
-            if (random.randint(0,1)==0):
-                feature = random.randint(0, N_FEATURES-1)
-                cell = random.randint(0,15)
-                self.genome[0][feature][0][cell] = not self.genome[0][feature][0][cell]
-            else:
-                feature = random.randint(0, N_FEATURES-1)
-                feature_2 = random.randint(feature, N_FEATURES + N_FEATURES_C - 1)
-                self.genome[1][feature][feature_2] += random.uniform(-0.02, 0.02)
+        pass
     
     def crossover(ind1, ind2):
-        genome = copy.deepcopy(ind1.genome)
-        if (random.randint(0,2)==0):
-            #mutate some feature
-            i = random.randint(0,N_FEATURES-1)
-            j = random.randint(i, min(N_FEATURES, i+10))
-            for k in range(i, j):
-                genome[0][k] = copy.deepcopy(ind2.genome[0][k])
-                for z in range(k, N_FEATURES+N_FEATURES_C):
-                    genome[1][k][z] = copy.deepcopy(ind2.genome[1][k][z])
-        for i in range(random.randint(3,15)):
-            #Mutate the matrix
-            i = random.randint(0,N_FEATURES-1)
-            for k in range(0, N_FEATURES+N_FEATURES_C):
-                genome[1][i][k] = copy.deepcopy(ind2.genome[1][i][k])
-                
-        return StateReward(genome)
+        return StateReward()
 
     def __lt__(self, other):
         return False
@@ -150,7 +160,86 @@ class StateReward:
 
 #The following code handles the learning part
 STATES = {} # [ [chessboard], pawn, [remaining], real_reward ]
-SAMPLE_TARGET = 3
+SAMPLE_TARGET = 8
+
+
+class Climber:
+    def __init__(self):
+        self.individual = StateReward()  
+        self.get_state_sample()
+
+    def get_state_sample(self):
+        sample = []
+        for i in range(9,14):
+            target = SAMPLE_TARGET
+            for k in STATES[str(i)].keys():
+                if (len(STATES[str(i)][k])<target):
+                    target = len(STATES[str(i)][k])
+            for k in STATES[str(i)].keys():
+                set_ = STATES[str(i)][k]
+                if (len(set_)>target):
+                    sample.extend(random.sample(set_, target))
+                else:
+                    sample.extend(set_)
+        self.sample = sample
+
+    def random_error(self):
+        error = 0
+        for state in self.sample:
+            reward = 0
+            error += (reward - state[3])**2
+        return (error / len(self.sample))
+
+
+    def value_individual(self,individual):
+        error = 0
+        for state in self.sample:
+            reward = individual.get_reward(state)
+            error += (reward - state[3])**2
+        return (error / len(self.sample))
+
+    def validate(self):
+        self.get_state_sample()
+        print(f"Error was {self.error}. Now it's {self.value_individual(self.individual)}")
+
+    def new_gen(self):
+        self.error = self.value_individual(self.individual)
+        print(f"Starting new generation - x. Best: {self.error} - random would be {self.random_error()}")
+        for i in range(StateReward.state_length):
+            old_v = self.individual.genome[i]
+            self.individual.genome[i] = old_v + 0.07
+            error = self.value_individual(self.individual)
+            if (error < self.error):
+                self.error = error 
+                #print(f"New error {self.error} after tweaking param {i}")
+                continue
+            self.individual.genome[i] = old_v - 0.07
+            error = self.value_individual(self.individual)
+            if (error < self.error):
+                self.error = error 
+                #print(f"New error {self.error} after tweaking param {i}")
+                continue
+            self.individual.genome[i] = old_v
+
+
+def load_data():
+    global STATES 
+    with open("dataset/pre_processed/output.json", 'r') as source:
+        STATES = json.load(source)
+    for i in range(9,14):
+        for k in STATES[str(i)].keys():
+            set_ = STATES[str(i)][k]
+            for state in set_:
+                state[0] = np.array(state[0])  
+
+def climb():
+    load_data()
+    climber = Climber()
+    for i in range(200):
+        climber.new_gen()
+        if (i%50==0):
+            print(f"Gen {i}")
+    climber.validate()
 
 class Island:
     def __init__(self, population_size, offspring_size, mutations):
@@ -201,7 +290,8 @@ def evolve():
     global STATES 
     with open("dataset/pre_processed/output.json", 'r') as source:
         STATES = json.load(source)
-
+    for state in STATES:
+        state[0] = np.array(state[0])
     island_1 = Island(120,220, 3)
     island_2 = Island(100,200, 6)
     #island_3 = Island(100,200, 4)
@@ -224,4 +314,5 @@ def evolve():
 
 
 if __name__== '__main__':
-    evolve()
+    #evolve()
+    climb()
