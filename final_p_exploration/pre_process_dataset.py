@@ -5,8 +5,23 @@ from quarto_utils import checkState
 
 #This class handles the pre-processing of the datasets stored in dataset/raw
 
+
+"""Estendere dataset
+> Se uno stato è negativo, posso generare uno stato positivo di livello più alto togliendo una pedina e dandola al giocatore
+    ->Il contrario non funziona.
+
+    Negativo -> tutti figli positivi    -->Posso generare stati positivi di livello più basso simulando una mossa qualsiasi
+    Positivo -> Almeno un figlio negativo        -->Non posso fare nulla 
+
+    Generare stati "fratelli": funzionalmente equivalenti? -> Non facile
+
+"""
+
+
 class PreProcessDataset:
-    PROCESSED_TARGET = "dataset/pre_processed/output.json"
+    MAX_SIZE = 1000
+    PROCESSED_TARGET = "dataset/pre_processed/training_dataset.json"
+    PROCESSED_TARGET_2 = "dataset/pre_processed/validation_dataset.json"
     def count_state_size(state):
         c = 0
         for i in state: 
@@ -15,7 +30,7 @@ class PreProcessDataset:
     def pre_process(paths):
         dataset = None
         processed = dict()
-        n = 0
+        sum_ = 0
         for path in paths:
             with open(path, 'r') as source:
                 dataset = json.load(source)
@@ -23,111 +38,64 @@ class PreProcessDataset:
                 full, winning = checkState(record[0][0])
                 if (full or winning):
                     continue 
-                n += 1
                 count = PreProcessDataset.count_state_size(record[0][0])
-                if count in processed:
-                    processed[count].append(record)
+                if not count in processed:
+                    processed[count] = {'pos': [], 'neg': [], 'neut':[]}
+                
+                if record[1] > 0:
+                    processed[count]['pos'].append(StateReward.process_state_for_dataset(record))
+                elif record[1] < 0:
+                    processed[count]['neg'].append(StateReward.process_state_for_dataset(record))
                 else:
-                    processed[count] = [record]
-        target = int((len(processed[10]) + len(processed[11]) + 8000) / 2)
+                    processed[count]['neut'].append(StateReward.process_state_for_dataset(record))
+                sum_ += 1
+
+
         to_exp = []
-        print(n)
-        for key in processed:
-            print(f"Key: {key}: {len(processed[key])}:")
-        #Debug
-        reward = dict()
-
+        """print("No balance:")
         for key in processed.keys():
-            if (len(processed[key]) > target):
-                processed[key] = random.sample(processed[key], target)
-
-            #Debug 
-            if not key in reward: reward[key] = {'pos': [], 'neg': [], 'neut':[]}
-            for state in processed[key]:
-                if state[1] > 0:
-                    reward[key]['pos'].append(StateReward.process_state(state[0]) + [state[1]])
-                elif state[1] < 0:
-                    reward[key]['neg'].append(StateReward.process_state(state[0]) + [state[1]])
-                else:
-                    reward[key]['neut'].append(StateReward.process_state(state[0]) + [state[1]])
-            continue
-
-            #Pre process
-            to_exp.extend([StateReward.process_state(s) for s in processed[key]])
-            print(f" {min(processed[key], target)} states of size {key}")
-        #print(reward)
+            print(f"{key}: {len(processed[key]['pos'])} pos, {len(processed[key]['neut'])} neut, {len(processed[key]['neg'])} neg")
+        print(f"In total: {sum_} states available to export")"""
         
-        for key in reward:
-            print(f"{key}: {len(reward[key]['pos'])} pos, {len(reward[key]['neut'])} neut, {len(reward[key]['neg'])} neg")
-
-        #Save dataset
-        random.shuffle(to_exp)
-        with open(PreProcessDataset.PROCESSED_TARGET, 'w') as dataset:
-            dataset.write(json.dumps(reward))
-
-    
-    def balance(path):
-        dataset = None
-        processed = dict()
-        with open(path, 'r') as source:
-            dataset = json.load(source)
-        for record in dataset['exp']:
-            full, winning = checkState(record[0][0])
-            if (full or winning):
-                continue 
-            count = PreProcessDataset.count_state_size(record[0][0])
-            if count in processed:
-                processed[count].append(record)
-            else:
-                processed[count] = [record]
-        #Debug
-        reward = dict()
-
+        #Balance
+        sum_ = 0
+        print("Balanced 1")
         for key in processed.keys():
-            #Debug 
-            if not key in reward: reward[key] = {'pos': [], 'neg': [], 'neut':[]}
-            for state in processed[key]:
-                if state[1] > 0:
-                    reward[key]['pos'].append(state)
-                elif state[1] < 0:
-                    reward[key]['neg'].append(state)
+            target = max(len(processed[key]['neg']), len(processed[key]['neut']), 30)
+            target = min(target, PreProcessDataset.MAX_SIZE)
+            for t in processed[key].keys():
+                if (len(processed[key][t]) > target):
+                    processed[key][t] = random.sample(processed[key][t], target)
+                    sum_ += target 
                 else:
-                    reward[key]['neut'].append(state)
+                    sum_ += len(processed[key][t])
+                random.shuffle(processed[key][t])
+        for key in processed.keys():
+            print(f"{key}: {len(processed[key]['pos'])} pos, {len(processed[key]['neut'])} neut, {len(processed[key]['neg'])} neg")
+        print(f"In total: {sum_} states available to export")
+
+        #Get two separate datasets
+        tranining_dataset = []
+        validate_dataset = []
+        for key in processed.keys():
+            for t in processed[key].keys():
+                len_ = int(len( processed[key][t])/2)
+                if (len_ > 50):
+                    tranining_dataset.append( processed[key][t][:len_] )
+                    validate_dataset.append( processed[key][t][len_:] )
+                else:
+                    tranining_dataset.append( processed[key][t] )
+                    validate_dataset.append( processed[key][t] )
         #Save dataset
-        to_r = []
-        for key in reward.keys():
-            target = int((len(reward[key]['neg']) +  len(reward[key]['neut'])) / 2)
-            if (len(reward[key]['pos']) > target):
-                to_r.extend(random.sample(reward[key]['pos'], target))
-            else:
-                to_r.extend(reward[key]['pos'])
+        with open(PreProcessDataset.PROCESSED_TARGET, 'w') as dataset:
+            dataset.write(json.dumps(tranining_dataset))
+        with open(PreProcessDataset.PROCESSED_TARGET_2, 'w') as dataset:
+            dataset.write(json.dumps(validate_dataset))
 
-            if (len(reward[key]['neg']) > target):
-                to_r.extend(random.sample(reward[key]['neg'], target))
-            else:
-                to_r.extend(reward[key]['neg'])
 
-            if (len(reward[key]['neut']) > target):
-                to_r.extend(random.sample(reward[key]['neut'], target))
-            else:
-                to_r.extend(reward[key]['neut'])
-
-        with open(path, 'w') as dataset:
-            dataset.write(json.dumps({'exp': to_r}))
     
 
-    def sample_dataset(source, target_1, target_2):
-        with open(source, 'r') as source:
-            dataset = json.load(source) 
-        target = int(len(dataset)/2)
-        random.shuffle(dataset)
-        with open(target_1, 'w') as dataset:
-            dataset[:target].write(json.dumps())
-        with open(target_1, 'w') as dataset:
-            dataset[target:].write(json.dumps())
 
-
-#PreProcessDataset.balance("dataset/raw/dataset_length_8_8.json")
 PreProcessDataset.pre_process([
     "dataset/raw/dataset_length_8_2.json",
     "dataset/raw/dataset_length_8_3.json",
@@ -136,4 +104,11 @@ PreProcessDataset.pre_process([
     "dataset/raw/dataset_length_8_6.json",
     "dataset/raw/dataset_length_8_7.json",
     "dataset/raw/dataset_length_8.json",
+    "dataset/raw/dataset_v3__0.json",
+    "dataset/raw/dataset_v5__0.json",
+    "dataset/raw/dataset_v5__1.json",
+    "dataset/raw/dataset_v5__2.json",
+    "dataset/raw/dataset_v6__0.json",
+    "dataset/raw/dataset_v6__1.json",
+    "dataset/raw/dataset_v6__2.json"
 ])

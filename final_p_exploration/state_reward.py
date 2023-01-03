@@ -37,8 +37,12 @@ MULTILINE_BLOCK = ((LINES_PRECEDING[len(LINES_PRECEDING)-1] * 6) + 80)
 class StateReward:
     state_length = (MULTILINE_BLOCK)*2
     #Process state is used to convert the raw state from the agent to the format used to compute the function
+    #return [[chessboard], assigned_pawn, set[remaining], {reward} ]
+    def process_state_for_dataset(state):
+        return [state[0][0], state[0][1], list(set([x for x in range(16)]) - set(state[0][0]) - set([state[0][1]]) ), state[1]]
+
     def process_state(state):
-        return [np.array(state[0]), state[1], list(set([x for x in range(16)]) - set(state[0]))]
+        return [np.array(state[0][0]), state[0][1], list(set([x for x in range(16)]) - set(state[0]) - set([state[0][1]]))]
 
     def get_random_genome(self):
         return np.array([random.uniform(-1,1) for _ in range(StateReward.state_length)])
@@ -159,88 +163,102 @@ class StateReward:
 
 
 #The following code handles the learning part
-STATES = {} # [ [chessboard], pawn, [remaining], real_reward ]
+STATES = [] # [ [chessboard], pawn, [remaining], real_reward ]
+VALIDATION_STATES = []
 SAMPLE_TARGET = 8
-
 
 class Climber:
     def __init__(self):
         self.individual = StateReward()  
-        self.get_state_sample()
 
-    def get_state_sample(self):
-        sample = []
-        for i in range(9,14):
-            target = SAMPLE_TARGET
-            for k in STATES[str(i)].keys():
-                if (len(STATES[str(i)][k])<target):
-                    target = len(STATES[str(i)][k])
-            for k in STATES[str(i)].keys():
-                set_ = STATES[str(i)][k]
-                if (len(set_)>target):
-                    sample.extend(random.sample(set_, target))
-                else:
-                    sample.extend(set_)
-        self.sample = sample
-
-    def random_error(self):
+    def random_error(self, sample):
         error = 0
-        for state in self.sample:
+        for state in sample:
             reward = 0
             error += (reward - state[3])**2
         return (error / len(self.sample))
 
 
-    def value_individual(self,individual):
+    def value_individual(self,individual, sample):
         error = 0
-        for state in self.sample:
+        for state in sample:
             reward = individual.get_reward(state)
             error += (reward - state[3])**2
         return (error / len(self.sample))
 
     def validate(self):
-        self.get_state_sample()
-        print(f"Error was {self.error}. Now it's {self.value_individual(self.individual)}")
+        with_traning_dataset = self.value_individual(self.individual, STATES)
+        with_validation_dataset = self.value_individual(self.individual, VALIDATION_STATES)
+        print(f"Error was {self.error}. Now it's {self.value_individual(self.individual)}. Validate: {with_validation_dataset}")
+        return {"training": with_traning_dataset, "validation": with_validation_dataset}
 
-    def new_gen(self):
-        self.error = self.value_individual(self.individual)
-        print(f"Starting new generation - x. Best: {self.error} - random would be {self.random_error()}")
+    def new_gen(self, learning_rate = 0.07):
+        self.error = self.value_individual(self.individual, STATES)
+        print(f"Starting new generation - x. Best: {self.error} - random would be {self.random_error(STATE)}")
         for i in range(StateReward.state_length):
             old_v = self.individual.genome[i]
-            self.individual.genome[i] = old_v + 0.07
+            self.individual.genome[i] = old_v + learning_rate
             error = self.value_individual(self.individual)
             if (error < self.error):
                 self.error = error 
-                #print(f"New error {self.error} after tweaking param {i}")
                 continue
-            self.individual.genome[i] = old_v - 0.07
+            self.individual.genome[i] = old_v - learning_rate
             error = self.value_individual(self.individual)
             if (error < self.error):
                 self.error = error 
-                #print(f"New error {self.error} after tweaking param {i}")
                 continue
             self.individual.genome[i] = old_v
+    
+    def export_self(self, num):
+        with open(f"training/export_{num}", 'w') as exp:
+            exp.write(json.dumps(self.individual.genome))
 
+def export(climber, iteration):
+    with open(f"training/result_{iteration}", 'w') as exp:
+        exp.write(json.dumps(climber.validate()))
+    climber.export_self(iteration)
 
 def load_data():
-    global STATES 
-    with open("dataset/pre_processed/output.json", 'r') as source:
+    global STATES; global VALIDATION_STATES
+    with open("dataset/pre_processed/training_dataset.json", 'r') as source:
         STATES = json.load(source)
-    for i in range(9,14):
-        for k in STATES[str(i)].keys():
-            set_ = STATES[str(i)][k]
-            for state in set_:
-                state[0] = np.array(state[0])  
+    for state in STATES:
+        state[0] = np.array(state[0])  
+    with open("dataset/pre_processed/validation_dataset.json", 'r') as source:
+        VALIDATION_STATES = json.load(source)
+    for state in VALIDATION_STATES:
+        state[0] = np.array(state[0])  
+            
 
 def climb():
     load_data()
     climber = Climber()
-    for i in range(200):
-        climber.new_gen()
+    for i in range(20):
+        climber.new_gen(0.1)
+
+    for i in range(50):
+        climber.new_gen(0.08)
+    export(climber, 0)
+    exp_n = 0
+    for i in range(250):
+        climber.new_gen(0.07)
         if (i%50==0):
-            print(f"Gen {i}")
+            exp_n += 1
+            export(climber, exp_n)
+
+    for i in range(350):
+        climber.new_gen(0.05)
+        if (i%50==0):
+            exp_n += 1
+            export(climber, exp_n)
+            
+    export(climber, exp_n+1)
+
     climber.validate()
 
+
+
+#This class was meant to train the model using GA, but it was never used.
 class Island:
     def __init__(self, population_size, offspring_size, mutations):
         self.population_size = population_size

@@ -4,10 +4,12 @@ import random
 from collapse_state.collapse_state import collapse
 from quarto_utils import checkState
 
-export_file = "dataset/raw/dataset_length_8_8.json"
+export_file = "dataset/raw/dataset_v6_"
 DEPTH = 8
+MAX_BEFORE_DISCARD = 8000000
 
 cache = None 
+toExport = None
 num = 0
 
 class exported_info:
@@ -39,8 +41,11 @@ def all_s(state, depth=0, stop_flat_after=3):   #Returns 1 if it is a good state
         return (cache[str(state)].minmax_result, cache[str(state)].wins + cache[str(state)].loses)
 
     num += 1
-    if (num%50000 == 0):
-        print(num)
+
+    if (num > MAX_BEFORE_DISCARD):
+        return (-1001,0)
+    if (num % 100000 == 0):
+        print(f"States visited: {num}")
 
     #Check if there is a victory or if the chessboard is full
     chess_full, victory = checkState(state[0])
@@ -82,6 +87,9 @@ def all_s(state, depth=0, stop_flat_after=3):   #Returns 1 if it is a good state
         next = all_s(new_s, depth=depth+1, stop_flat_after=stop_flat_after)
         result = -next[0]
         tries += next[1]
+        if (result == 1001):
+            return (-1001,0)
+
         if (result > my_best_move):
             my_best_move = result 
         if (result == 1):
@@ -95,30 +103,31 @@ def all_s(state, depth=0, stop_flat_after=3):   #Returns 1 if it is a good state
             break
             
     cache[str(state)] = exported_info(my_best_move, wins, loses, state)
+    toExport[str(state)] = exported_info(my_best_move, wins, loses, state)
     return (my_best_move, tries)
 
 
-
-def generate_dataset(depth):
-    global cache; global num
-    random.seed()
-    cache = dict()
+def generate_one(depth, iteration):
+    global cache; global num; global toExport
+    toExport = dict()
     num = 0
     initial_state = []
     all_pawns = set([x for x in range(0,15)])
-
     for _ in range(16-depth):
         pawn = random.sample(all_pawns, 1)[0]
         all_pawns.remove(pawn)
         initial_state.append(pawn)
     for i in range(0, depth):
         initial_state.append(-1)
+    random.shuffle(initial_state)
+    s = all_s((np.array(initial_state), None))
+    if (s[0] == -1001):
+        print(f"Iteration {iteration} failed")
+        return
 
-    all_s((np.array(initial_state), None))
-    print(num)
     #Transform cache for export
     to_export = []
-    for value in cache.values():
+    for value in toExport.values():
         tuple = value.get_tuple()
         #Discard non informative states
         if (tuple[1] == 0 and random.randint(0,100)<80):
@@ -126,7 +135,16 @@ def generate_dataset(depth):
         #print(tuple)
         to_export.append(tuple)
 
-    with open(export_file, 'w') as dataset:
+    with open(export_file+f"_{iteration}.json", 'w') as dataset:
         dataset.write(json.dumps({'exp': to_export}))
+    print(f"Iteration {iteration} succeeded")
+
+def generate_dataset(depth):
+    global cache; global num
+    cache = dict()
+    random.seed()
+
+    for i in range(5):
+        generate_one(depth, i)
     
 generate_dataset(DEPTH)
