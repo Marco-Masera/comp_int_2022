@@ -42,13 +42,21 @@ class StateReward:
         return [state[0][0], state[0][1], list(set([x for x in range(16)]) - set(state[0][0]) - set([state[0][1]]) ), state[1]]
 
     def process_state(state):
-        return [np.array(state[0][0]), state[0][1], list(set([x for x in range(16)]) - set(state[0]) - set([state[0][1]]))]
+        return [np.array(state[0]), state[1], list(set([x for x in range(16)]) - set(state[0]) - set([state[1]]))]
 
     def get_random_genome(self):
         genome = dict()
         for i in range(1,15):
             genome[i] = np.array([random.uniform(-1,1) for _ in range(StateReward.state_length)])
         return genome
+    
+    def load_genome():
+        with open("training/reward_genome.json", 'r') as source:
+            genome = json.load(source)
+        g = dict()
+        for key in genome.keys():
+            g[int(key)] = np.array(genome[key])
+        return g
 
     def count_state_size(state):
         c = 0
@@ -200,7 +208,7 @@ SAMPLE_TARGET = 8
 
 class Climber:
     def __init__(self):
-        self.individual = StateReward()
+        self.individual = StateReward(genome=StateReward.load_genome())
         self.build_truth_values()
 
     def build_truth_values(self):
@@ -230,19 +238,28 @@ class Climber:
             error += (reward - state[3])**2
         return (error / len(STATES[key]))
 
-    def value_individual_globally(self, individual):
+    def value_individual_globally(self, individual, states = STATES):
         error = 0
         num = 0
-        for size_ in STATES.keys():
-            num += len(STATES[size_])
-            for state in STATES[size_]:
+        for size_ in states.keys():
+            num += len(states[size_])
+            for state in states[size_]:
                 reward = individual.get_reward(state)
                 error += (reward - state[3])**2
         return (error / num)
+    
+    def print_evaluations(self, individual, states = STATES):
+        for size_ in states.keys():
+            num = len(states[size_])
+            error = 0
+            for state in states[size_]:
+                reward = individual.get_reward(state)
+                error += (reward - state[3])**2
+            print(f"Length: {size_}, ds_size: {num}, error: {error/num}")
 
     def validate(self):
-        with_traning_dataset = self.value_individual_globally(self.individual)
-        with_validation_dataset = self.value_individual_globally(self.individual)
+        with_traning_dataset = self.value_individual_globally(self.individual, STATES)
+        with_validation_dataset = self.value_individual_globally(self.individual, VALIDATION_STATES)
         print(f"Training dataset error: {with_traning_dataset}. Validation dataset error: {with_validation_dataset}")
         return {"training": with_traning_dataset, "validation": with_validation_dataset}
 
@@ -293,21 +310,18 @@ def load_data():
 
 def climb():
     load_data()
-    generation = 1
+    generation = 2
 
     climber = Climber()
-    
-    for i in range(10):
+    climber.print_evaluations(climber.individual, VALIDATION_STATES)
+
+    for i in range(25):
         print(f"Gen {i}")
         climber.new_gen(0.12)
-    export(climber, 0,generation)
-    for i in range(20):
+    export(climber, 1,generation)
+    for i in range(60):
         print(f"Gen {i}")
         climber.new_gen(0.1)
-    export(climber, 1,generation)
-    for i in range(30):
-        print(f"Gen {i}")
-        climber.new_gen(0.08)
     export(climber, 2,generation)
     exp_n = 2
     for i in range(80):

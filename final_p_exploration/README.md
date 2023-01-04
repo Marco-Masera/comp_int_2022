@@ -53,9 +53,15 @@ The script also divides the dataset into 2 partitions, used to train and to vali
 ## Training and validating
 Training the model made use of a tranining dataset, and the goal was to reduce the average squared differece between the extimated reward and the one provided by the dataset. After the learning phase, the function is then validated by computing the squared error on another partition of the original dataset that was not used during training.
 ## Training algorithm
-This part was done very experimentally. The first try involved a GA where both the features and the weights used to compute the reward function were dinamically learned. This did not work as even after many generations the algorithm could get better results compared to a pure random guess.
+This part was done very experimentally, with many different tries.
+The general idea is to have a set of binary *features* that can be computed on the state to be evaluated, and a set of weights to multiply to each feature. A *feature* can be any arbitrary function computed on the state of the game or on part of it.
 
-The second version involves a vector of binary, pre defined features to be computed on states, and a vector of corresponding weights that can be dinamically learned. The estimated reward is simply the product between them.
+
+The first try involved a GA where both the features and the weights used to compute the reward function were dinamically learned. The number of features was fixed (N) but the algorithm could change which boxes of the chessboard were included in each feature and what function the feature would use. The weights were contained in an NxN matrix, associating a weight to any pair of features that could activate together.
+This did not work and after many generations the algorithm could get better results compared to a pure random guess.
+
+
+The second version involves a vector of pre defined features, and the learning process would only change the vector of corresponding weights.
 The features are:
 * For each line in the chessboard:
 * * for each possible lengths of lines (0,1,2,3):
@@ -68,8 +74,14 @@ The features are:
 * *     One feature regarding the current assigned pawn.
 * *     Two features regarding the remaining pawns, one if *at least 1* pawns respect the previous statement, the other if *at least 2* do.
 
-The algorithm used to learn the weights is a simple **hill climbing**. The first idea was to use hill climbing only as an explorative tool, to check if was feasible to 
-The main reasons not to try to use GA here are:
+The idea was having a set of features specific enough to be able to extract useful informations from it and to compute the extimated reward only as a linear combination of them (in the first try it was quadratic). 
+
+This showed better results than the first try. 
+
+The third and final version used 15 different vectors of weights, to be used depending on the number of pawns on the chessboard: as the algorithm proved to work best when the dataset had all states with the same number of pawns in it, it made sense to make it learn separately on each number of possible pawns present.
+
+The final algorithm used to learn the weights is a simple **hill climbing**. 
+The first idea was to use hill climbing just as an explorative tool for me to check if the set of features was good enough for an algorithm to learn from, and then switch to GA for the real training. But at the end I chosed to keep it, as:
 * The main problem with **hill climbing** is that it can get stuck in local minima. But here our main goal is not to improve the results on the training dataset as much as we can, but to avoid over-fitting the model and thus reducing generalizability. GA might help getting a lower square error on the training dataset but does not guarantee in any way to provide a more generalizable result - on the contrary, a square error too low might indicate over-fitting.
 * The learning process with GA might be too slow to be doable with my machine.
 
@@ -77,5 +89,17 @@ The main reasons not to try to use GA here are:
 The StateReward class evaluate states in two steps: first it computes a vector called *truth_values* that specifies what features are active in the specific state, then it computes the product of this vector with the weights vector.
 To speed up training, the *truth_values* of the states in the dataset are pre-computed and cached. This is done in the *Climber* class at creation. The *StateReward* class offers a method called *get_reward_from_truth_value* that computes the reward from the truth_values instead of the state.
 
-## Results
+### Results
+The rewards associated to the dataset are in the range [-100.00, 140.00]; as such, a random guess would give us an average squared error of 14.400. 
+After many iterations of learning, the average squared error on the validation dataset was of 1.700.
+
+### Reward for states with fewer pawns
+As said before, the first dataset generated contained only states with 8+ pawns already placed, and a good size only for states with 10+, as solving states with fewer pawns with MinMax was unfeasible.
+A solution for this was to include the extimated reward function learned so far into the *generate_dataset* script: if we have a reliable extimate for the reward on states with at least 10 pawns, then the MinMax algorithm can stop ad depth 10 and return the extimate. 
+
+To generate this second dataset another variant of MinMax was used.
+
+This was it was possible to generate a more complete dataset and repeat the learning phase.
+Of course it can be expected that the learned reward function for states with fewer pawns will be less reliable.
+
 
