@@ -45,11 +45,21 @@ class StateReward:
         return [np.array(state[0][0]), state[0][1], list(set([x for x in range(16)]) - set(state[0]) - set([state[0][1]]))]
 
     def get_random_genome(self):
-        return np.array([random.uniform(-1,1) for _ in range(StateReward.state_length)])
+        self.genome = dict()
+        for i in range(1,16):
+            self.genome[i] = np.array([random.uniform(-1,1) for _ in range(StateReward.state_length)])
+
+    def count_state_size(state):
+        c = 0
+        for i in state: 
+            if i>-1: c+=1;
+        return c
     
     #State needs to be processed via process_state before this function is called
     def get_reward(self, state): #State = ([chessboard], assigned_pawn, set[remaining])
         global LINES; global LINES_PRECEDING; global MULTILINE_BLOCK;
+        size = StateReward.count_state_size(state[0])
+        genome = self.genome[size]
         full, winning = checkState(state[0])
         if (winning):
             return 120
@@ -72,10 +82,11 @@ class StateReward:
                 mylines[index] = (False, acc, 0)
                 continue 
             #can extend, can block -> calcolati da pawn
-            if (count != 0 and acc & (~(state[1] ^ last))):#(can_extend):
-                self.truth_value[(index*8) + count] = 1
-            else: # (can_block):
-                self.truth_value[(index*8) + count + 4] = 1
+            if (state[1]!=None):
+                if (count != 0 and acc & (~(state[1] ^ last))):#(can_extend):
+                    self.truth_value[(index*8) + count] = 1
+                else: # (can_block):
+                    self.truth_value[(index*8) + count + 4] = 1
 
             #posso bloccare avversario -> calcolato
             one_extending = False; one_blocking = False
@@ -103,14 +114,15 @@ class StateReward:
 
                 #Verifica se posso bloccare entrambe, aumentarle entrambe o una e una
                 acc = mylines[index][1]; acc2 = mylines[common[0]][1]
-                can_extend_one = (acc & (~(state[1] ^ mylines[index][2])))!=0
-                can_extend_two = (acc2 & (~(state[1] ^ mylines[common[0]][2])))!=0
-                if (can_extend_one and can_extend_two):
-                    self.truth_value[80 + (LINES_PRECEDING[index] * 6)] = 1
-                elif (can_extend_one != can_extend_two):
-                    self.truth_value[80 + (LINES_PRECEDING[index] * 6) + 1] = 2
-                else:
-                    self.truth_value[80 + (LINES_PRECEDING[index] * 6) + 2] = 3
+                if (state[1]!=None):
+                    can_extend_one = (acc & (~(state[1] ^ mylines[index][2])))!=0
+                    can_extend_two = (acc2 & (~(state[1] ^ mylines[common[0]][2])))!=0
+                    if (can_extend_one and can_extend_two):
+                        self.truth_value[80 + (LINES_PRECEDING[index] * 6)] = 1
+                    elif (can_extend_one != can_extend_two):
+                        self.truth_value[80 + (LINES_PRECEDING[index] * 6) + 1] = 2
+                    else:
+                        self.truth_value[80 + (LINES_PRECEDING[index] * 6) + 2] = 3
                 #verifica se posso bloccare avversario, verifica se può bloccare me
                 canEO = 0; canBO = 0; canM = 0
                 for pawn in state[2]:
@@ -137,7 +149,7 @@ class StateReward:
                     if (canEO >= 2 and canBO >= 2 and canM >= 2): break
         
         
-        reward = np.matmul(self.genome,self.truth_value)
+        reward = np.matmul(genome,self.truth_value)
         if (reward > 0):
             return min(reward,140)
         else:
@@ -148,7 +160,6 @@ class StateReward:
             self.genome = self.get_random_genome()
         else:
             self.genome = genome
-        pass 
 
 
     def random_mutations(self, n_mutation):
@@ -176,7 +187,7 @@ class Climber:
         for state in sample:
             reward = 0
             error += (reward - state[3])**2
-        return (error / len(self.sample))
+        return (error / len(sample))
 
 
     def value_individual(self,individual, sample):
@@ -184,75 +195,93 @@ class Climber:
         for state in sample:
             reward = individual.get_reward(state)
             error += (reward - state[3])**2
-        return (error / len(self.sample))
+        return (error / len(sample))
+
+    def value_individual_globally(self, individual):
+        error = 0
+        num = 0
+        for size_ in STATES.keys():
+            num += len(STATES[size_])
+            for state in STATES[size_]:
+                reward = individual.get_reward(state)
+                error += (reward - state[3])**2
+        return (error / num)
 
     def validate(self):
-        with_traning_dataset = self.value_individual(self.individual, STATES)
-        with_validation_dataset = self.value_individual(self.individual, VALIDATION_STATES)
-        print(f"Error was {self.error}. Now it's {self.value_individual(self.individual)}. Validate: {with_validation_dataset}")
+        with_traning_dataset = self.value_individual_globally(self.individual, STATES)
+        with_validation_dataset = self.value_individual_globally(self.individual, VALIDATION_STATES)
+        print(f"Training dataset error: {with_traning_dataset}. Validation dataset error: {with_validation_dataset}")
         return {"training": with_traning_dataset, "validation": with_validation_dataset}
 
     def new_gen(self, learning_rate = 0.07):
-        self.error = self.value_individual(self.individual, STATES)
-        print(f"Starting new generation - x. Best: {self.error} - random would be {self.random_error(STATE)}")
-        for i in range(StateReward.state_length):
-            old_v = self.individual.genome[i]
-            self.individual.genome[i] = old_v + learning_rate
-            error = self.value_individual(self.individual)
-            if (error < self.error):
-                self.error = error 
-                continue
-            self.individual.genome[i] = old_v - learning_rate
-            error = self.value_individual(self.individual)
-            if (error < self.error):
-                self.error = error 
-                continue
-            self.individual.genome[i] = old_v
+        for size_ in STATES.keys():
+            for i in range(StateReward.state_length):
+                self.error_ = self.value_individual(self.individual, STATES[size_])
+                old_v = self.individual.genome[size_][i]
+                self.individual.genome[size_][i] = old_v + learning_rate
+                error = self.value_individual(self.individual, STATES[size_])
+                if (error < self.error):
+                    self.error = error 
+                    continue
+                self.individual.genome[size_][i] = old_v - learning_rate
+                error = self.value_individual(self.individual, STATES[size_])
+                if (error < self.error):
+                    self.error = error 
+                    continue
+                self.individual.genome[size_][i] = old_v
     
-    def export_self(self, num):
-        with open(f"training/export_{num}", 'w') as exp:
-            exp.write(json.dumps(self.individual.genome))
+    def export_self(self, num, gen):
+        to_export = copy.deepcopy(self.individual.genome)
+        for i in range(1,16):
+            to_export[i] = list(to_export[i])
+        with open(f"training/export_{gen}_{num}", 'w') as exp:
+            exp.write(json.dumps(to_export))
 
-def export(climber, iteration):
-    with open(f"training/result_{iteration}", 'w') as exp:
+def export(climber, iteration, generation):
+    with open(f"training/result_{generation}_{iteration}", 'w') as exp:
         exp.write(json.dumps(climber.validate()))
-    climber.export_self(iteration)
+    climber.export_self(iteration, generation)
 
 def load_data():
     global STATES; global VALIDATION_STATES
     with open("dataset/pre_processed/training_dataset.json", 'r') as source:
         STATES = json.load(source)
-    for state in STATES:
-        state[0] = np.array(state[0])  
+        for size_ in STATES.keys():
+            for state in STATES[size_]:
+                state[0] = np.array(state[0])
     with open("dataset/pre_processed/validation_dataset.json", 'r') as source:
         VALIDATION_STATES = json.load(source)
-    for state in VALIDATION_STATES:
-        state[0] = np.array(state[0])  
+        for size_ in VALIDATION_STATES.keys():
+            for state in VALIDATION_STATES[size_]:
+                state[0] = np.array(state[0])
+
             
 
 def climb():
     load_data()
+    generation = 1
     climber = Climber()
     for i in range(20):
         climber.new_gen(0.1)
+    export(climber, 0,generation)
 
     for i in range(50):
         climber.new_gen(0.08)
-    export(climber, 0)
-    exp_n = 0
+    export(climber, 1,generation)
+    exp_n = 1
     for i in range(250):
         climber.new_gen(0.07)
-        if (i%50==0):
+        if (i%20==0):
             exp_n += 1
-            export(climber, exp_n)
+            export(climber, exp_n,generation)
 
     for i in range(350):
         climber.new_gen(0.05)
-        if (i%50==0):
+        if (i%40==0):
             exp_n += 1
-            export(climber, exp_n)
+            export(climber, exp_n,generation)
             
-    export(climber, exp_n+1)
+    export(climber, exp_n+1,generation)
 
     climber.validate()
 
@@ -303,34 +332,3 @@ class Island:
     def get_best_performer_error(self):
         return self.value_individual(self.population[0])
 
-
-def evolve():
-    global STATES 
-    with open("dataset/pre_processed/output.json", 'r') as source:
-        STATES = json.load(source)
-    for state in STATES:
-        state[0] = np.array(state[0])
-    island_1 = Island(120,220, 3)
-    island_2 = Island(100,200, 6)
-    #island_3 = Island(100,200, 4)
-    #continent = Island(600,1200, 2)
-    gen = 0
-    print("Start")
-    while(True):
-        island_1.new_gen()
-        island_2.new_gen()
-        gen += 1
-        best_1 = island_1.get_best_performer_error()
-        best_2 = island_2.get_best_performer_error()
-        if (gen%100==0):
-            island_1.tsunami(40)
-            island_2.tsunami(40)
-            with open("res.txt",'w') as output:
-                output.write(str(min(best_1, best_2)))
-        if (gen%10==0):
-            print(f"Gen {gen}: {best_1} {best_2}")
-
-
-if __name__== '__main__':
-    #evolve()
-    climb()

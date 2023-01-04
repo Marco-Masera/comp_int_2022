@@ -49,13 +49,6 @@ class PreProcessDataset:
                 else:
                     processed[count]['neut'].append(StateReward.process_state_for_dataset(record))
                 sum_ += 1
-
-
-        to_exp = []
-        """print("No balance:")
-        for key in processed.keys():
-            print(f"{key}: {len(processed[key]['pos'])} pos, {len(processed[key]['neut'])} neut, {len(processed[key]['neg'])} neg")
-        print(f"In total: {sum_} states available to export")"""
         
         #Balance
         sum_ = 0
@@ -75,17 +68,19 @@ class PreProcessDataset:
         print(f"In total: {sum_} states available to export")
 
         #Get two separate datasets
-        tranining_dataset = []
-        validate_dataset = []
+        tranining_dataset = dict()
+        validate_dataset = dict()
         for key in processed.keys():
+            tranining_dataset[key] = []
+            validate_dataset[key] = []
             for t in processed[key].keys():
                 len_ = int(len( processed[key][t])/2)
                 if (len_ > 50):
-                    tranining_dataset.append( processed[key][t][:len_] )
-                    validate_dataset.append( processed[key][t][len_:] )
+                    tranining_dataset[key].extend( processed[key][t][:len_] )
+                    validate_dataset[key].extend( processed[key][t][len_:] )
                 else:
-                    tranining_dataset.append( processed[key][t] )
-                    validate_dataset.append( processed[key][t] )
+                    tranining_dataset[key].extend( processed[key][t] )
+                    validate_dataset[key].extend( processed[key][t] )
         #Save dataset
         with open(PreProcessDataset.PROCESSED_TARGET, 'w') as dataset:
             dataset.write(json.dumps(tranining_dataset))

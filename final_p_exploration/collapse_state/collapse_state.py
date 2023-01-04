@@ -93,7 +93,6 @@ def flat_pawns_recursive(elems, dipendenze, posizione):
     return None
 
 def flat_pawns(state, pawn):
-    #Ugly messing around with the list to make the function compatible with the minmax agent of generate_dataset
     elems = np.array([x for x in state if x != -1])
     state_length = len(elems)
     remaining = all_elems - set(elems) 

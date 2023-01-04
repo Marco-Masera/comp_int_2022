@@ -3,8 +3,9 @@ import json
 import random
 from collapse_state.collapse_state import collapse
 from quarto_utils import checkState
+from state_reward import StateReward
 
-export_file = "dataset/raw/dataset_v6_"
+export_file = "dataset/raw/dataset_v1_"
 DEPTH = 8
 MAX_BEFORE_DISCARD = 8000000
 
@@ -30,16 +31,18 @@ class exported_info:
 
 
 #State = (Chessboard state, chosen_pawn)
-def all_s(state, depth=0, stop_flat_after=3):   #Returns 1 if it is a good state for him, -1 if bad- 0 if stall
-    global cache; global num;
+def all_s(state, depth=0, use_extimate_at = None, extimator = None):   #Returns 1 if it is a good state for him, -1 if bad- 0 if stall
+    global cache; global num
+    assert (use_extimate_at==None or extimator!=None)
+
     MIN_NEG = 12
     MIN_NEUT = 12
     MAX_BEFORE_GIVEUP = 200
-    #if (depth < stop_flat_after):
     state = collapse(state[0], state[1])
     if (str(state) in cache):
         return (cache[str(state)].minmax_result, cache[str(state)].wins + cache[str(state)].loses)
-
+    if (depth >= use_extimate_at):
+        return extimator.get_reward(StateReward.process_state(state))
     num += 1
 
     if (num > MAX_BEFORE_DISCARD):
@@ -84,7 +87,7 @@ def all_s(state, depth=0, stop_flat_after=3):   #Returns 1 if it is a good state
         new_s = (np.copy(state[0]), i)
         if (my_pawn!=None):
             new_s[0][index] = my_pawn
-        next = all_s(new_s, depth=depth+1, stop_flat_after=stop_flat_after)
+        next = all_s(new_s, depth=depth+1)
         result = -next[0]
         tries += next[1]
         if (result == 1001):
