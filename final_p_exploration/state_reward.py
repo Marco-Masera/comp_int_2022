@@ -45,9 +45,10 @@ class StateReward:
         return [np.array(state[0][0]), state[0][1], list(set([x for x in range(16)]) - set(state[0]) - set([state[0][1]]))]
 
     def get_random_genome(self):
-        self.genome = dict()
-        for i in range(1,16):
-            self.genome[i] = np.array([random.uniform(-1,1) for _ in range(StateReward.state_length)])
+        genome = dict()
+        for i in range(1,15):
+            genome[i] = np.array([random.uniform(-1,1) for _ in range(StateReward.state_length)])
+        return genome
 
     def count_state_size(state):
         c = 0
@@ -55,16 +56,36 @@ class StateReward:
             if i>-1: c+=1;
         return c
     
+    def solve_last_move(self,state):
+        st = copy.deepcopy(state)
+        for box in st[0]:
+            if (box==-1): box = st[1]
+        full, winning = checkState(st[0])
+        if (winning):
+            return 120
+        return 0
+
+    def get_reward_from_truth_value(self,truth_value, state_length):
+        reward = np.matmul(self.genome[state_length],truth_value)
+        if (reward > 0):
+            return min(reward,140)
+        else:
+            return max(-140, reward)
+
     #State needs to be processed via process_state before this function is called
     def get_reward(self, state): #State = ([chessboard], assigned_pawn, set[remaining])
         global LINES; global LINES_PRECEDING; global MULTILINE_BLOCK;
+
         size = StateReward.count_state_size(state[0])
-        genome = self.genome[size]
         full, winning = checkState(state[0])
-        if (winning):
-            return 120
+        if (winning): #player already won
+            return -160
         if (full):
             return 0
+        if (size==15):
+            return self.solve_last_move(state)
+
+        genome = self.genome[size]
         chessboard = state[0]
         mylines = np.array([(False, 0,0) for _ in range(16)])
         self.truth_value = np.array([0 for _ in range(StateReward.state_length)])
@@ -147,8 +168,7 @@ class StateReward:
                         else:
                             self.truth_value[80 + MULTILINE_BLOCK + (LINES_PRECEDING[index] * 6) + 5] = 1
                     if (canEO >= 2 and canBO >= 2 and canM >= 2): break
-        
-        
+
         reward = np.matmul(genome,self.truth_value)
         if (reward > 0):
             return min(reward,140)
@@ -180,7 +200,19 @@ SAMPLE_TARGET = 8
 
 class Climber:
     def __init__(self):
-        self.individual = StateReward()  
+        self.individual = StateReward()
+        self.build_truth_values()
+
+    def build_truth_values(self):
+        self.states_truth_values = dict()
+        for size_ in STATES.keys():
+            l = []
+            for state in STATES[size_]:
+                #self.states_truth_values[size_]
+                self.individual.get_reward(state)
+                value = copy.deepcopy(self.individual.truth_value)
+                l.append(value)
+            self.states_truth_values[size_] = np.array(l)
 
     def random_error(self, sample):
         error = 0
@@ -190,12 +222,13 @@ class Climber:
         return (error / len(sample))
 
 
-    def value_individual(self,individual, sample):
+    def value_individual(self,individual, key):
         error = 0
-        for state in sample:
-            reward = individual.get_reward(state)
+        for index, state in enumerate(STATES[key]):
+            truth_value = self.states_truth_values[key][index]
+            reward = individual.get_reward_from_truth_value(truth_value, int(key))
             error += (reward - state[3])**2
-        return (error / len(sample))
+        return (error / len(STATES[key]))
 
     def value_individual_globally(self, individual):
         error = 0
@@ -208,27 +241,28 @@ class Climber:
         return (error / num)
 
     def validate(self):
-        with_traning_dataset = self.value_individual_globally(self.individual, STATES)
-        with_validation_dataset = self.value_individual_globally(self.individual, VALIDATION_STATES)
+        with_traning_dataset = self.value_individual_globally(self.individual)
+        with_validation_dataset = self.value_individual_globally(self.individual)
         print(f"Training dataset error: {with_traning_dataset}. Validation dataset error: {with_validation_dataset}")
         return {"training": with_traning_dataset, "validation": with_validation_dataset}
 
     def new_gen(self, learning_rate = 0.07):
         for size_ in STATES.keys():
+            size_int = int(size_)
+            self.error = self.value_individual(self.individual, size_)
             for i in range(StateReward.state_length):
-                self.error_ = self.value_individual(self.individual, STATES[size_])
-                old_v = self.individual.genome[size_][i]
-                self.individual.genome[size_][i] = old_v + learning_rate
-                error = self.value_individual(self.individual, STATES[size_])
+                old_v = self.individual.genome[size_int][i]
+                self.individual.genome[size_int][i] = old_v + learning_rate
+                error = self.value_individual(self.individual, size_)
                 if (error < self.error):
                     self.error = error 
                     continue
-                self.individual.genome[size_][i] = old_v - learning_rate
-                error = self.value_individual(self.individual, STATES[size_])
+                self.individual.genome[size_int][i] = old_v - learning_rate
+                error = self.value_individual(self.individual, size_)
                 if (error < self.error):
                     self.error = error 
                     continue
-                self.individual.genome[size_][i] = old_v
+                self.individual.genome[size_int][i] = old_v
     
     def export_self(self, num, gen):
         to_export = copy.deepcopy(self.individual.genome)
@@ -260,24 +294,33 @@ def load_data():
 def climb():
     load_data()
     generation = 1
-    climber = Climber()
-    for i in range(20):
-        climber.new_gen(0.1)
-    export(climber, 0,generation)
 
-    for i in range(50):
-        climber.new_gen(0.08)
+    climber = Climber()
+    
+    for i in range(10):
+        print(f"Gen {i}")
+        climber.new_gen(0.12)
+    export(climber, 0,generation)
+    for i in range(20):
+        print(f"Gen {i}")
+        climber.new_gen(0.1)
     export(climber, 1,generation)
-    exp_n = 1
-    for i in range(250):
+    for i in range(30):
+        print(f"Gen {i}")
+        climber.new_gen(0.08)
+    export(climber, 2,generation)
+    exp_n = 2
+    for i in range(80):
+        print(f"Gen {i}")
         climber.new_gen(0.07)
         if (i%20==0):
             exp_n += 1
             export(climber, exp_n,generation)
 
-    for i in range(350):
+    for i in range(100):
+        print(f"Gen {i}")
         climber.new_gen(0.05)
-        if (i%40==0):
+        if (i%20==0):
             exp_n += 1
             export(climber, exp_n,generation)
             
@@ -285,6 +328,8 @@ def climb():
 
     climber.validate()
 
+if (__name__=='__main__'):
+    climb()
 
 
 #This class was meant to train the model using GA, but it was never used.

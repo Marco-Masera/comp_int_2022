@@ -73,5 +73,9 @@ The main reasons not to try to use GA here are:
 * The main problem with **hill climbing** is that it can get stuck in local minima. But here our main goal is not to improve the results on the training dataset as much as we can, but to avoid over-fitting the model and thus reducing generalizability. GA might help getting a lower square error on the training dataset but does not guarantee in any way to provide a more generalizable result - on the contrary, a square error too low might indicate over-fitting.
 * The learning process with GA might be too slow to be doable with my machine.
 
+### Training algorithm optimization
+The StateReward class evaluate states in two steps: first it computes a vector called *truth_values* that specifies what features are active in the specific state, then it computes the product of this vector with the weights vector.
+To speed up training, the *truth_values* of the states in the dataset are pre-computed and cached. This is done in the *Climber* class at creation. The *StateReward* class offers a method called *get_reward_from_truth_value* that computes the reward from the truth_values instead of the state.
+
 ## Results
 

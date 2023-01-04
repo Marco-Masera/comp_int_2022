@@ -6,20 +6,9 @@ from quarto_utils import checkState
 #This class handles the pre-processing of the datasets stored in dataset/raw
 
 
-"""Estendere dataset
-> Se uno stato è negativo, posso generare uno stato positivo di livello più alto togliendo una pedina e dandola al giocatore
-    ->Il contrario non funziona.
-
-    Negativo -> tutti figli positivi    -->Posso generare stati positivi di livello più basso simulando una mossa qualsiasi
-    Positivo -> Almeno un figlio negativo        -->Non posso fare nulla 
-
-    Generare stati "fratelli": funzionalmente equivalenti? -> Non facile
-
-"""
-
 
 class PreProcessDataset:
-    MAX_SIZE = 1000
+    MAX_SIZE = 500
     PROCESSED_TARGET = "dataset/pre_processed/training_dataset.json"
     PROCESSED_TARGET_2 = "dataset/pre_processed/validation_dataset.json"
     def count_state_size(state):
@@ -36,9 +25,9 @@ class PreProcessDataset:
                 dataset = json.load(source)
             for record in dataset['exp']:
                 full, winning = checkState(record[0][0])
-                if (full or winning):
-                    continue 
                 count = PreProcessDataset.count_state_size(record[0][0])
+                if (full or winning or count==15):
+                    continue 
                 if not count in processed:
                     processed[count] = {'pos': [], 'neg': [], 'neut':[]}
                 
