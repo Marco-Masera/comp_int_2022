@@ -35,6 +35,7 @@ MULTILINE_BLOCK = ((LINES_PRECEDING[len(LINES_PRECEDING)-1] * 6) + 80)
 
 
 class StateReward:
+    MIN_SIZE = 5
     state_length = (MULTILINE_BLOCK)*2
     #Process state is used to convert the raw state from the agent to the format used to compute the function
     #return [[chessboard], assigned_pawn, set[remaining], {reward} ]
@@ -92,7 +93,9 @@ class StateReward:
             return 0
         if (size==15):
             return self.solve_last_move(state)
-
+        if (size < StateReward.MIN_SIZE):
+            return 0
+            
         genome = self.genome[size]
         chessboard = state[0]
         mylines = np.array([(False, 0,0) for _ in range(16)])
@@ -205,6 +208,8 @@ class StateReward:
 STATES = [] # [ [chessboard], pawn, [remaining], real_reward ]
 VALIDATION_STATES = []
 SAMPLE_TARGET = 8
+#Min 5
+LENGTHS_TO_TRAIN = ["6","8","9","10",  "11","12","13","15"]
 
 class Climber:
     def __init__(self):
@@ -241,7 +246,8 @@ class Climber:
     def value_individual_globally(self, individual, states = STATES):
         error = 0
         num = 0
-        for size_ in states.keys():
+        for size_ in LENGTHS_TO_TRAIN:
+            if (not size_ in states): continue
             num += len(states[size_])
             for state in states[size_]:
                 reward = individual.get_reward(state)
@@ -249,7 +255,8 @@ class Climber:
         return (error / num)
     
     def print_evaluations(self, individual, states = STATES):
-        for size_ in states.keys():
+        for size_ in LENGTHS_TO_TRAIN:
+            if (not size_ in states): continue
             num = len(states[size_])
             error = 0
             for state in states[size_]:
@@ -264,7 +271,8 @@ class Climber:
         return {"training": with_traning_dataset, "validation": with_validation_dataset}
 
     def new_gen(self, learning_rate = 0.07):
-        for size_ in STATES.keys():
+        for size_ in LENGTHS_TO_TRAIN:
+            if (not size_ in STATES): continue
             size_int = int(size_)
             self.error = self.value_individual(self.individual, size_)
             for i in range(StateReward.state_length):
@@ -300,11 +308,30 @@ def load_data():
         for size_ in STATES.keys():
             for state in STATES[size_]:
                 state[0] = np.array(state[0])
+    with open("dataset/pre_processed/training_dataset_v2.json", 'r') as source:
+        states_2 = json.load(source)
+        for size_ in states_2.keys():
+            for state in states_2[size_]:
+                state[0] = np.array(state[0])
+            if (size_ in STATES):
+                STATES[size_].extend(states_2[size_])
+            else:
+                STATES[size_] = states_2[size_]
+
     with open("dataset/pre_processed/validation_dataset.json", 'r') as source:
         VALIDATION_STATES = json.load(source)
         for size_ in VALIDATION_STATES.keys():
             for state in VALIDATION_STATES[size_]:
                 state[0] = np.array(state[0])
+    with open("dataset/pre_processed/validation_dataset_v2.json", 'r') as source:
+        states_2 = json.load(source)
+        for size_ in states_2.keys():
+            for state in states_2[size_]:
+                state[0] = np.array(state[0])
+            if (size_ in VALIDATION_STATES):
+                VALIDATION_STATES[size_].extend(states_2[size_])
+            else:
+                VALIDATION_STATES[size_] = states_2[size_]
 
             
 
@@ -314,24 +341,23 @@ def climb():
 
     climber = Climber()
     climber.print_evaluations(climber.individual, VALIDATION_STATES)
-
-    for i in range(25):
+    for i in range(40):
         print(f"Gen {i}")
-        climber.new_gen(0.12)
+        climber.new_gen(0.15)
     export(climber, 1,generation)
-    for i in range(60):
+    for i in range(100):
         print(f"Gen {i}")
         climber.new_gen(0.1)
     export(climber, 2,generation)
     exp_n = 2
-    for i in range(80):
+    for i in range(100):
         print(f"Gen {i}")
         climber.new_gen(0.07)
-        if (i%20==0):
-            exp_n += 1
-            export(climber, exp_n,generation)
-
-    for i in range(100):
+        
+    export(climber, exp_n,generation)
+    climber.print_evaluations(climber.individual, VALIDATION_STATES)
+    return
+    for i in range(150):
         print(f"Gen {i}")
         climber.new_gen(0.05)
         if (i%20==0):

@@ -8,9 +8,9 @@ from quarto_utils import checkState
 
 
 class PreProcessDataset:
-    MAX_SIZE = 500
-    PROCESSED_TARGET = "dataset/pre_processed/training_dataset.json"
-    PROCESSED_TARGET_2 = "dataset/pre_processed/validation_dataset.json"
+    MAX_SIZE = 1000
+    PROCESSED_TARGET = "dataset/pre_processed/training_dataset_v2.json"
+    PROCESSED_TARGET_2 = "dataset/pre_processed/validation_dataset_v2.json"
     def count_state_size(state):
         c = 0
         for i in state: 
@@ -55,7 +55,6 @@ class PreProcessDataset:
         for key in processed.keys():
             print(f"{key}: {len(processed[key]['pos'])} pos, {len(processed[key]['neut'])} neut, {len(processed[key]['neg'])} neg")
         print(f"In total: {sum_} states available to export")
-
         #Get two separate datasets
         tranining_dataset = dict()
         validate_dataset = dict()
@@ -81,18 +80,44 @@ class PreProcessDataset:
 
 
 PreProcessDataset.pre_process([
-    "dataset/raw/dataset_length_8_2.json",
-    "dataset/raw/dataset_length_8_3.json",
-    "dataset/raw/dataset_length_8_4.json",
-    "dataset/raw/dataset_length_8_5.json",
-    "dataset/raw/dataset_length_8_6.json",
-    "dataset/raw/dataset_length_8_7.json",
-    "dataset/raw/dataset_length_8.json",
+    "dataset/raw/dataset_v0__0.json",
+    "dataset/raw/dataset_v1__0.json",
+    "dataset/raw/dataset_v1__1.json",
+    "dataset/raw/dataset_v1__2.json",
+    "dataset/raw/dataset_v1__3.json",
+    "dataset/raw/dataset_v1__4.json",
     "dataset/raw/dataset_v3__0.json",
+    "dataset/raw/dataset_v3__1.json",
+    "dataset/raw/dataset_v3__2.json",
+    "dataset/raw/dataset_v3__3.json",
+    "dataset/raw/dataset_v3__4.json",
+    "dataset/raw/dataset_v4__0.json",
+    "dataset/raw/dataset_v4__1.json",
+    "dataset/raw/dataset_v4__2.json",
+    "dataset/raw/dataset_v4__3.json",
+    "dataset/raw/dataset_v4__4.json",
     "dataset/raw/dataset_v5__0.json",
     "dataset/raw/dataset_v5__1.json",
     "dataset/raw/dataset_v5__2.json",
+    "dataset/raw/dataset_v5__3.json",
+    "dataset/raw/dataset_v5__4.json",
     "dataset/raw/dataset_v6__0.json",
     "dataset/raw/dataset_v6__1.json",
-    "dataset/raw/dataset_v6__2.json"
+    "dataset/raw/dataset_v6__2.json",
+    "dataset/raw/dataset_v7__0.json",
+    "dataset/raw/dataset_v8__0.json",
+    "dataset/raw/dataset_v8__1.json",
+    "dataset/raw/dataset_v8__2.json",
+    "dataset/raw/dataset_v8__3.json",
+    "dataset/raw/dataset_v8__4.json",
+    "dataset/raw/dataset_v9__0.json",
+    "dataset/raw/dataset_v9__1.json",
+    "dataset/raw/dataset_v9__2.json",
+    "dataset/raw/dataset_v9__3.json",
+    "dataset/raw/dataset_v10__0.json",
+    "dataset/raw/dataset_v10__1.json",
+    "dataset/raw/dataset_v10__2.json",
+    "dataset/raw/dataset_v11__0.json",
+    "dataset/raw/dataset_v11__1.json",
+    "dataset/raw/dataset_v11__2.json"
 ])
